@@ -35,6 +35,7 @@
 #include "ejectInterface.h"
 #include "mainwindow.h"
 #include "MacroFile.h"
+#include "flashdiskdata.h"
 
 
 namespace Ui {
@@ -150,6 +151,7 @@ private:
     QMap<GDrive *,QList<GMount *>> deviceMap;
     QMap<GDrive *,QList<GMount *>>::Iterator it;
     int driveVolumeNum;
+    FlashDiskData* m_dataFlashDisk;
     //authority
     //QDBusInterface *systemIface;
 public:
