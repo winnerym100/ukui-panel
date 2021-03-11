@@ -97,17 +97,25 @@ int FlashDiskData::addVolumeInfoWithDrive(FDDriveInfo driveInfo, FDVolumeInfo vo
 
 int FlashDiskData::addMountInfoWithDrive(FDDriveInfo driveInfo, FDVolumeInfo volumeInfo, FDMountInfo mountInfo)
 {
-    if (driveInfo.strId.empty() || volumeInfo.strId.empty() || mountInfo.strId.empty()) {
+    if (driveInfo.strId.empty() || mountInfo.strId.empty()) {
         return -1;
     }
     map<string, FDDriveInfo>::iterator itDriveInfo = m_devInfoWithDrive.find(driveInfo.strId);
     if (itDriveInfo != m_devInfoWithDrive.end()) {
         volumeInfo.mountInfo = mountInfo;
-        itDriveInfo->second.listVolumes[volumeInfo.strId] = volumeInfo;
+        if (volumeInfo.strId.empty()) {
+            itDriveInfo->second.listVolumes[mountInfo.strId] = volumeInfo;
+        } else {
+            itDriveInfo->second.listVolumes[volumeInfo.strId] = volumeInfo;
+        }
     } else {
         driveInfo.listVolumes.clear();
         volumeInfo.mountInfo = mountInfo;
-        driveInfo.listVolumes[volumeInfo.strId] = volumeInfo;
+        if (volumeInfo.strId.empty()) {
+            driveInfo.listVolumes[mountInfo.strId] = volumeInfo;
+        } else {
+            driveInfo.listVolumes[volumeInfo.strId] = volumeInfo;
+        }
         m_devInfoWithDrive[driveInfo.strId] = driveInfo;
     }
     return 0;
@@ -234,6 +242,34 @@ int FlashDiskData::removeMountInfo(FDMountInfo mountInfo)
     return 1;
 }
 
+bool FlashDiskData::isMountInfoExist(FDMountInfo mountInfo)
+{
+    if (mountInfo.strId.empty()) {
+        return false;
+    }
+    if (m_devInfoWithMount.find(mountInfo.strId) != m_devInfoWithMount.end()) {
+        return true;
+    }
+    map<string, FDDriveInfo>::iterator itDriveInfo;
+    map<string, FDVolumeInfo>::iterator itVolumeInfo;
+    itVolumeInfo = m_devInfoWithVolume.begin();
+    for (; itVolumeInfo != m_devInfoWithVolume.end(); itVolumeInfo++) {
+        if (itVolumeInfo->second.mountInfo.strId == mountInfo.strId) {
+            return true;
+        }
+    }
+    itDriveInfo = m_devInfoWithDrive.begin();
+    for (; itDriveInfo != m_devInfoWithDrive.end(); itDriveInfo++) {
+        itVolumeInfo = itDriveInfo->second.listVolumes.begin();
+        for (; itVolumeInfo != itDriveInfo->second.listVolumes.end(); itVolumeInfo++) {
+            if (itVolumeInfo->second.mountInfo.strId == mountInfo.strId) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 unsigned FlashDiskData::getValidInfoCount()
 {
     unsigned uDriveCount = 0;
@@ -262,6 +298,9 @@ void FlashDiskData::OutputInfos()
     uMountCount = m_devInfoWithMount.size();
     uVolumeCount = m_devInfoWithVolume.size();
     map<string, FDDriveInfo>::iterator itDriveInfo = m_devInfoWithDrive.begin();
+    for (; itDriveInfo != m_devInfoWithDrive.end(); itDriveInfo++) {
+        uDriveCount += itDriveInfo->second.listVolumes.size();
+    }
     qDebug()<<"info count:"<<uDriveCount<<"|"<<uVolumeCount<<"|"<<uMountCount;
     qDebug()<<"+++++++++++++++++++++++++++++++++++++++++++++++++++++++++";
     map<string, FDMountInfo>::iterator itMountInfo = m_devInfoWithMount.begin();
@@ -290,7 +329,7 @@ void FlashDiskData::OutputInfos()
         }
     }
     qDebug()<<"--------------------------------------------------------";
-    map<string, FDDriveInfo>::iterator itDriveInfo = m_devInfoWithDrive.begin();
+    itDriveInfo = m_devInfoWithDrive.begin();
     for (; itDriveInfo != m_devInfoWithDrive.end(); itDriveInfo++) {
         qDebug()<<"Drive:"<<QString::fromStdString(itDriveInfo->second.strId)<<"|"
             <<QString::fromStdString(itDriveInfo->second.strName)<<"|"<<itDriveInfo->second.isCanEject

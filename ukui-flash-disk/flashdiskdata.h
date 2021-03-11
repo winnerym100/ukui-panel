@@ -86,6 +86,7 @@ public:
     int removeMountInfo(FDMountInfo mountInfo);
     unsigned getValidInfoCount();
     void clearAllData();
+    bool isMountInfoExist(FDMountInfo mountInfo);
 
     void OutputInfos();
 

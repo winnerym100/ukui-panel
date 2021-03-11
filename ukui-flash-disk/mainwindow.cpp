@@ -234,7 +234,7 @@ void MainWindow::getDeviceInfo()
                                 GVolume* volume = (GVolume *)lVolume->data;
                                 FDVolumeInfo volumeInfo;
                                 bool isValidMount = true;
-                                char *volumeId = g_volume_get_uuid(volume);
+                                char *volumeId = g_volume_get_identifier(volume,G_VOLUME_IDENTIFIER_KIND_UNIX_DEVICE);
                                 if (volumeId) {
                                     volumeInfo.strId = volumeId;
                                     g_free(volumeId);
@@ -344,7 +344,7 @@ void MainWindow::getDeviceInfo()
                     }
                     g_free(devPath);
                 }
-                char *volumeId = g_volume_get_uuid(volume);
+                char *volumeId = g_volume_get_identifier(volume,G_VOLUME_IDENTIFIER_KIND_UNIX_DEVICE);
                 if (volumeId) {
                     volumeInfo.strId = volumeId;
                     g_free(volumeId);
@@ -438,52 +438,128 @@ void MainWindow::getDeviceInfo()
             GMount *gmount = (GMount *)lMount->data;
             GVolume *gvolume = g_mount_get_volume(gmount);
             if (!gvolume) {
-                FDMountInfo mountInfo;
-                bool isValidMount = true;
-                mountInfo.isCanEject = g_mount_can_eject(gmount);
-                mountInfo.isCanUnmount = g_mount_can_unmount(gmount);
-                if (mountInfo.isCanEject || mountInfo.isCanUnmount) {
-                    char *mountId = g_mount_get_uuid(gmount);
-                    if (mountId) {
-                        mountInfo.strId = mountId;
-                        g_free(mountId);
-                    }
-                    char *mountName = g_mount_get_name(gmount);
-                    if (mountName) {
-                        mountInfo.strName = mountName;
-                        g_free(mountName);
-                    }
-                    // get mount total size
-                    GFile *fileRoot = g_mount_get_root(gmount);
-                    GFileInfo *info = g_file_query_filesystem_info(fileRoot,G_FILE_ATTRIBUTE_FILESYSTEM_SIZE,nullptr,nullptr);
-                    mountInfo.lluTotalSize = g_file_info_get_attribute_uint64(info,G_FILE_ATTRIBUTE_FILESYSTEM_SIZE);
-                    g_object_unref(info);
-                    g_object_unref(fileRoot);
-                    // get mount uri
-                    GFile *root = g_mount_get_default_location(gmount);
-                    if (root) {
-                        mountInfo.isNativeDev = g_file_is_native(root);     //判断设备是本地设备or网络设备
-                        char *mountUri = g_file_get_uri(root);           //get挂载点的uri路径
-                        if (mountUri) {
-                            mountInfo.strUri = mountUri;
-                            if (g_str_has_prefix(mountUri,"file:///data")) {
-                                isValidMount = false;
-                            } else {
-                                if (mountInfo.strId.empty()) {
-                                    mountInfo.strId = mountInfo.strUri;
+                GDrive* gdrive = g_mount_get_drive(gmount);
+                if (gdrive) {
+                    char *devPath = g_drive_get_identifier(gdrive,G_DRIVE_IDENTIFIER_KIND_UNIX_DEVICE);
+                    if (devPath != NULL) {
+                        FDDriveInfo driveInfo;
+                        driveInfo.strId = devPath;
+                        char *strName = g_drive_get_name(gdrive);
+                        if (strName) {
+                            driveInfo.strName = strName;
+                            g_free(strName);
+                        }
+                        driveInfo.isCanEject = g_drive_can_eject(gdrive);
+                        driveInfo.isCanStop = g_drive_can_stop(gdrive);
+                        driveInfo.isCanStart = g_drive_can_start(gdrive);
+                        driveInfo.isRemovable = g_drive_is_removable(gdrive);
+                        if(driveInfo.isCanEject || driveInfo.isCanStop) {
+                            if(!g_str_has_prefix(devPath,"/dev/sda")) {
+                                if(g_str_has_prefix(devPath,"/dev/sr") || g_str_has_prefix(devPath,"/dev/sd")) {
+                                    FDMountInfo mountInfo;
+                                    bool isValidMount = true;
+                                    mountInfo.isCanEject = g_mount_can_eject(gmount);
+                                    mountInfo.isCanUnmount = g_mount_can_unmount(gmount);
+                                    if (mountInfo.isCanEject || mountInfo.isCanUnmount) {
+                                        char *mountId = g_mount_get_uuid(gmount);
+                                        if (mountId) {
+                                            mountInfo.strId = mountId;
+                                            g_free(mountId);
+                                        }
+                                        char *mountName = g_mount_get_name(gmount);
+                                        if (mountName) {
+                                            mountInfo.strName = mountName;
+                                            g_free(mountName);
+                                        }
+                                        // get mount total size
+                                        GFile *fileRoot = g_mount_get_root(gmount);
+                                        GFileInfo *info = g_file_query_filesystem_info(fileRoot,G_FILE_ATTRIBUTE_FILESYSTEM_SIZE,nullptr,nullptr);
+                                        mountInfo.lluTotalSize = g_file_info_get_attribute_uint64(info,G_FILE_ATTRIBUTE_FILESYSTEM_SIZE);
+                                        g_object_unref(info);
+                                        g_object_unref(fileRoot);
+                                        // get mount uri
+                                        GFile *root = g_mount_get_default_location(gmount);
+                                        if (root) {
+                                            mountInfo.isNativeDev = g_file_is_native(root);     //判断设备是本地设备or网络设备
+                                            char *mountUri = g_file_get_uri(root);           //get挂载点的uri路径
+                                            if (mountUri) {
+                                                mountInfo.strUri = mountUri;
+                                                if (g_str_has_prefix(mountUri,"file:///data")) {
+                                                    isValidMount = false;
+                                                } else {
+                                                    if (mountInfo.strId.empty()) {
+                                                        mountInfo.strId = mountInfo.strUri;
+                                                    }
+                                                }
+                                                g_free(mountUri);
+                                            }
+                                            char *tooltip = g_file_get_parse_name(root);      //提示，即文件的解释
+                                            if (tooltip) {
+                                                mountInfo.strTooltip =tooltip;
+                                                g_free(tooltip);
+                                            }
+                                            g_object_unref(root);
+                                        }
+                                        if (isValidMount) {
+                                            FDVolumeInfo volumeInfo;
+                                            volumeInfo.mountInfo = mountInfo;
+                                            m_dataFlashDisk->addMountInfoWithDrive(driveInfo, volumeInfo, mountInfo);
+                                        }
+                                    }
                                 }
                             }
-                            g_free(mountUri);
                         }
-                        char *tooltip = g_file_get_parse_name(root);      //提示，即文件的解释
-                        if (tooltip) {
-                            mountInfo.strTooltip =tooltip;
-                            g_free(tooltip);
-                        }
-                        g_object_unref(root);
+                        g_free(devPath);
                     }
-                    if (isValidMount) {
-                        m_dataFlashDisk->addMountInfo(mountInfo);
+                    g_object_unref(gdrive);
+                } else {
+                    FDMountInfo mountInfo;
+                    bool isValidMount = true;
+                    mountInfo.isCanEject = g_mount_can_eject(gmount);
+                    mountInfo.isCanUnmount = g_mount_can_unmount(gmount);
+                    if (mountInfo.isCanEject || mountInfo.isCanUnmount) {
+                        char *mountId = g_mount_get_uuid(gmount);
+                        if (mountId) {
+                            mountInfo.strId = mountId;
+                            g_free(mountId);
+                        }
+                        char *mountName = g_mount_get_name(gmount);
+                        if (mountName) {
+                            mountInfo.strName = mountName;
+                            g_free(mountName);
+                        }
+                        // get mount total size
+                        GFile *fileRoot = g_mount_get_root(gmount);
+                        GFileInfo *info = g_file_query_filesystem_info(fileRoot,G_FILE_ATTRIBUTE_FILESYSTEM_SIZE,nullptr,nullptr);
+                        mountInfo.lluTotalSize = g_file_info_get_attribute_uint64(info,G_FILE_ATTRIBUTE_FILESYSTEM_SIZE);
+                        g_object_unref(info);
+                        g_object_unref(fileRoot);
+                        // get mount uri
+                        GFile *root = g_mount_get_default_location(gmount);
+                        if (root) {
+                            mountInfo.isNativeDev = g_file_is_native(root);     //判断设备是本地设备or网络设备
+                            char *mountUri = g_file_get_uri(root);           //get挂载点的uri路径
+                            if (mountUri) {
+                                mountInfo.strUri = mountUri;
+                                if (g_str_has_prefix(mountUri,"file:///data")) {
+                                    isValidMount = false;
+                                } else {
+                                    if (mountInfo.strId.empty()) {
+                                        mountInfo.strId = mountInfo.strUri;
+                                    }
+                                }
+                                g_free(mountUri);
+                            }
+                            char *tooltip = g_file_get_parse_name(root);      //提示，即文件的解释
+                            if (tooltip) {
+                                mountInfo.strTooltip =tooltip;
+                                g_free(tooltip);
+                            }
+                            g_object_unref(root);
+                        }
+                        if (isValidMount) {
+                            m_dataFlashDisk->addMountInfo(mountInfo);
+                        }
                     }
                 }
             } else {
@@ -545,7 +621,8 @@ void MainWindow::drive_connected_callback(GVolumeMonitor *monitor, GDrive *drive
             uSubVolumeSize = g_list_length(lVolume);
             g_list_free(lVolume);
         }
-        if (!driveInfo.strId.empty() && uSubVolumeSize > 0) {
+
+        if (!driveInfo.strId.empty()) {
             p_this->m_dataFlashDisk->addDriveInfo(driveInfo);
         }
         // perhaps uSubVolumeSize is 0 and is ok ?
@@ -611,6 +688,7 @@ void MainWindow::volume_added_callback(GVolumeMonitor *monitor, GVolume *volume,
     {
         QProcess::startDetached("gsettings set org.ukui.flash-disk.autoload ifautoload true");
     }
+    bool isNewMount = false;
     GDrive* gdrive = g_volume_get_drive(volume);
     if(!gdrive) {
         FDVolumeInfo volumeInfo;
@@ -624,7 +702,7 @@ void MainWindow::volume_added_callback(GVolumeMonitor *monitor, GVolume *volume,
             }
             g_free(devPath);
         }
-        char *volumeId = g_volume_get_uuid(volume);
+        char *volumeId = g_volume_get_identifier(volume,G_VOLUME_IDENTIFIER_KIND_UNIX_DEVICE);
         if (volumeId) {
             volumeInfo.strId = volumeId;
             g_free(volumeId);
@@ -659,6 +737,7 @@ void MainWindow::volume_added_callback(GVolumeMonitor *monitor, GVolume *volume,
                     volumeInfo.mountInfo.strName = mountName;
                     g_free(mountName);
                 }
+                isNewMount = !(p_this->m_dataFlashDisk->isMountInfoExist(volumeInfo.mountInfo));
                 // get mount total size
                 GFile *fileRoot = g_mount_get_root(mount);
                 GFileInfo *info = g_file_query_filesystem_info(fileRoot,G_FILE_ATTRIBUTE_FILESYSTEM_SIZE,nullptr,nullptr);
@@ -724,7 +803,7 @@ void MainWindow::volume_added_callback(GVolumeMonitor *monitor, GVolume *volume,
             if(driveInfo.isCanEject || driveInfo.isCanStop) {
                 if(!g_str_has_prefix(devPath,"/dev/sda")) {
                     if(g_str_has_prefix(devPath,"/dev/sr") || g_str_has_prefix(devPath,"/dev/sd")) {
-                        char *volumeId = g_volume_get_uuid(volume);
+                        char *volumeId = g_volume_get_identifier(volume,G_VOLUME_IDENTIFIER_KIND_UNIX_DEVICE);
                         if (volumeId) {
                             volumeInfo.strId = volumeId;
                             g_free(volumeId);
@@ -756,6 +835,7 @@ void MainWindow::volume_added_callback(GVolumeMonitor *monitor, GVolume *volume,
                                         volumeInfo.mountInfo.strName = mountName;
                                         g_free(mountName);
                                     }
+                                    isNewMount = !(p_this->m_dataFlashDisk->isMountInfoExist(volumeInfo.mountInfo));
                                     // get mount total size
                                     GFile *fileRoot = g_mount_get_root(mount);
                                     GFileInfo *info = g_file_query_filesystem_info(fileRoot,G_FILE_ATTRIBUTE_FILESYSTEM_SIZE,nullptr,nullptr);
@@ -801,6 +881,10 @@ void MainWindow::volume_added_callback(GVolumeMonitor *monitor, GVolume *volume,
             }
             g_free(devPath);
             p_this->m_dataFlashDisk->addVolumeInfoWithDrive(driveInfo, volumeInfo);
+            if (g_str_has_prefix(volumeInfo.strDevName.c_str(),"/dev/sr") && isNewMount) {
+                //qDebug()<<"cd data disk has mounted!";
+                Q_EMIT p_this->convertShowWindow();
+            }
         }
         g_object_unref(gdrive);
     }
@@ -816,7 +900,7 @@ void MainWindow::volume_removed_callback(GVolumeMonitor *monitor, GVolume *volum
 {
     qDebug()<<"volume removed";
     FDVolumeInfo volumeInfo;
-    char *volumeId = g_volume_get_uuid(volume);
+    char *volumeId = g_volume_get_identifier(volume,G_VOLUME_IDENTIFIER_KIND_UNIX_DEVICE);
     if (volumeId) {
         volumeInfo.strId = volumeId;
         g_free(volumeId);
@@ -864,7 +948,7 @@ void MainWindow::mount_added_callback(GVolumeMonitor *monitor, GMount *mount, Ma
         g_object_unref(gdrive);
     }
     if (gvolume) {
-        char *volumeId = g_volume_get_uuid(gvolume);
+        char *volumeId = g_volume_get_identifier(gvolume,G_VOLUME_IDENTIFIER_KIND_UNIX_DEVICE);
         char *devVolumePath = g_volume_get_identifier(gvolume,G_VOLUME_IDENTIFIER_KIND_UNIX_DEVICE);
         if (devVolumePath) {
             strVolumePath = devVolumePath;
@@ -935,7 +1019,7 @@ void MainWindow::mount_added_callback(GVolumeMonitor *monitor, GMount *mount, Ma
     if (driveInfo.strId.empty()) {
        Q_EMIT p_this->telephoneMount();
     }
-
+    bool isNewMount = !(p_this->m_dataFlashDisk->isMountInfoExist(mountInfo));
     if(isValidMount && !g_str_has_prefix(strVolumePath.c_str(),"/dev/sda") && (mountInfo.isCanUnmount || g_str_has_prefix(strVolumePath.c_str(),"/dev/bus")
             || g_str_has_prefix(strVolumePath.c_str(),"/dev/sr"))) {
         qDebug() << "real mount loaded";
@@ -960,6 +1044,10 @@ void MainWindow::mount_added_callback(GVolumeMonitor *monitor, GMount *mount, Ma
 
     if(p_this->m_dataFlashDisk->getValidInfoCount() >= 1)
     {
+        if (isValidMount && g_str_has_prefix(strVolumePath.c_str(),"/dev/sr") && isNewMount) {
+            //qDebug()<<"cd data disk has mounted!";
+            Q_EMIT p_this->convertShowWindow();
+        }
         p_this->m_systray->show();
     }
     p_this->m_dataFlashDisk->OutputInfos();
@@ -1041,7 +1129,7 @@ void MainWindow::frobnitz_result_func_volume(GVolume *source_object,GAsyncResult
             }
             g_object_unref(gdrive);
         }
-        char *volumeId = g_volume_get_uuid(source_object);
+        char *volumeId = g_volume_get_identifier(source_object,G_VOLUME_IDENTIFIER_KIND_UNIX_DEVICE);
         if (volumeId) {
             volumeInfo.strId = volumeId;
             g_free(volumeId);
@@ -1805,7 +1893,7 @@ void MainWindow::onClickedEjectItem(FDClickWidget* pThis, QString strDriveId, QS
                         uVolumeSize = g_list_length(current_volume_list);
                         for(lVolume = current_volume_list; lVolume != NULL; lVolume = lVolume->next){ //遍历驱动器上的所有卷设备
                             GVolume* volume = (GVolume *)lVolume->data;
-                            char *volumeId = g_volume_get_uuid(volume);
+                            char *volumeId = g_volume_get_identifier(volume,G_VOLUME_IDENTIFIER_KIND_UNIX_DEVICE);
                             if (volumeId) {
                                 if (strVolumeId != volumeId) {
                                     g_free(volumeId);
@@ -1851,7 +1939,7 @@ void MainWindow::onClickedEjectItem(FDClickWidget* pThis, QString strDriveId, QS
                 GVolume *volume = (GVolume *)lVolume->data;
                 GDrive *gdrive = g_volume_get_drive(volume);
                 if (!gdrive) {
-                    char *volumeId = g_volume_get_uuid(volume);
+                    char *volumeId = g_volume_get_identifier(volume,G_VOLUME_IDENTIFIER_KIND_UNIX_DEVICE);
                     if (volumeId) {
                         if (strVolumeId != volumeId) {
                             g_free(volumeId);
@@ -1943,6 +2031,10 @@ void MainWindow::onClickedEjectItem(FDClickWidget* pThis, QString strDriveId, QS
         m_dataFlashDisk->removeVolumeInfo(volumeInfo);
         driveInfo.strId = strDriveId.toStdString();
         m_dataFlashDisk->removeDriveInfo(driveInfo);
+        if(m_dataFlashDisk->getValidInfoCount() == 0)
+        {
+            m_systray->hide();
+        }
     }
     ui->centralWidget->hide();
 }
@@ -2065,7 +2157,7 @@ void MainWindow::frobnitz_normal_result_volume_eject(GVolume *source_object,GAsy
     if(!err)
     {
         FDVolumeInfo volumeInfo;
-        char *volumeId = g_volume_get_uuid(source_object);
+        char *volumeId = g_volume_get_identifier(source_object,G_VOLUME_IDENTIFIER_KIND_UNIX_DEVICE);
         if (volumeId) {
             volumeInfo.strId = volumeId;
             g_free(volumeId);
