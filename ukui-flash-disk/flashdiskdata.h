@@ -44,7 +44,6 @@ typedef struct FDMountInfo_s {
     bool   isNativeDev = false;
     bool   isNewInsert = false;
     quint64 lluTotalSize = 0;
-    GMount* pMount = NULL;
 }FDMountInfo;
 
 typedef struct FDVolumeInfo_s {
@@ -56,7 +55,6 @@ typedef struct FDVolumeInfo_s {
     bool   isCanEject = false;
     bool   isNewInsert = false;
     FDMountInfo mountInfo;
-    GVolume* pVolume = NULL;
 }FDVolumeInfo;
 
 typedef struct FDDriveInfo_s {
@@ -67,7 +65,6 @@ typedef struct FDDriveInfo_s {
     bool    isCanStart = false;
     bool    isCanStop = false;
     map<string, FDVolumeInfo> listVolumes;
-    GDrive* pDrive = NULL;
 }FDDriveInfo;
 
 class FlashDiskData : public QObject

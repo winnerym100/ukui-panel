@@ -57,6 +57,8 @@ add_executable(ukui-flash-disk
     fdframe.h
     flashdiskdata.cpp
     flashdiskdata.h
+    fdclickwidget.cpp
+    fdclickwidget.h
 )
 
 add_definitions(-DQT_NO_KEYWORDS)
