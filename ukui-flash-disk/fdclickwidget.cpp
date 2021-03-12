@@ -86,7 +86,7 @@ FDClickWidget::FDClickWidget(QWidget *parent,
         m_eject_button->installEventFilter(this);
         m_eject_button->setIcon(drawSymbolicColoredPixmap(QPixmap::fromImage(QIcon::fromTheme("media-eject-symbolic").pixmap(24,24).toImage())));
         m_eject_button->setFixedSize(40,40);
-        m_eject_button->setToolTip(tr("弹出"));
+        m_eject_button->setToolTip(tr("Eject"));
         connect(m_eject_button,SIGNAL(clicked()),SLOT(switchWidgetClicked()));  // this signal-slot function is to emit a signal which
                                                                             //is to trigger a slot in mainwindow
         drivename_H_BoxLayout->addSpacing(8);
